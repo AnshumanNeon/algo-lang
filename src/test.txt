@@ -1,19 +1,50 @@
+// ALGOLANG MASTER TEST SCRIPT
+// Do not add or remove lines above the GOTO test!
 START
-DECLARE n, i, j, is_prime, rem
-INPUT n
-i = 2
-IF i > n GOTO 19
-j = 2
-is_prime = 1
-IF j == i GOTO 15
-rem = i % j
-IF rem == 0 GOTO 13
-j = j + 1
-GOTO 8
-is_prime = 0
-GOTO 15
-IF is_prime == 0 GOTO 17
-OUTPUT i
-i = i + 1
-GOTO 5
+DECLARE a, b, c, name
+
+// --- 1. INPUT & OUTPUT TEST ---
+OUTPUT "Please enter your name (with quotes):"
+INPUT name
+OUTPUT "Hello"
+OUTPUT name
+
+// --- 2. MATH & ASSIGNMENT TEST ---
+a = 15
+b = 4
+c = (a + 5) * b / 2 % 7
+OUTPUT "Math result for c (should be 5):"
+OUTPUT c
+
+// --- 3. WHILE LOOP TEST ---
+OUTPUT "Starting WHILE loop (1 to 3):"
+a = 1
+WHILE a <= 3
+OUTPUT a
+a = a + 1
+ENDWHILE
+
+// --- 4. IF / ELIF / ELSE BLOCK TEST ---
+b = 10
+OUTPUT "Testing IF/ELIF/ELSE block..."
+IF b == 5
+OUTPUT "FAIL: b is 5"
+ENDIF
+ELIF b == 10
+OUTPUT "SUCCESS: ELIF block executed!"
+ENDELIF
+ELSE
+OUTPUT "FAIL: Hit ELSE block"
+ENDELSE
+
+// --- 5. INLINE IF TEST ---
+IF b != 5 OUTPUT "SUCCESS: Inline IF works!"
+
+// --- 6. GOTO TEST ---
+OUTPUT "Testing GOTO... jumping to line 47"
+GOTO 47
+OUTPUT "FAIL: This line should be skipped by GOTO!"
+OUTPUT "SUCCESS: GOTO landed successfully!"
+
+OUTPUT "All tests completed!"
 END

@@ -22,6 +22,7 @@ struct varValue {
 map<string, varValue> variables;
 
 bool isRunning = false;
+bool previousIfBranchExecuted = false; //tracks if an IF/ELIF was true to know if we should run ELSE
 
 //removes leading and trailing spaces from a string
 //scans for the first and last actual characters, then extracts only that portion.
@@ -49,7 +50,6 @@ float getValue(const string& token) {
         return 0.0f; 
     }
 }
-
 
 float doMaths(const string& expression) {
 
@@ -154,25 +154,62 @@ float doMaths(const string& expression) {
     return p.parseExpression(expression, pos);
 }
 
-//finds the matching ENDWHILE for a given WHILE statement
-int findEndWhile(int startIndex, const vector<string>& Buffer) {
-    int whileCount = 1;  // tracks nested while loops, this as a counter so that if we find another WHILE, we know that it is a nested while and find for another ENDWHILE
+//generic block finder for IF, ELIF, and ELSE
+int findBlockEnd(int startIndex, const vector<string>& Buffer, string startCmd, string endCmd) {
+    int count = 1;
     for (int i = startIndex + 1; i < Buffer.size(); i++) {
-        string currentLine = Buffer[i];
+        string currentLine = trim(Buffer[i]);
+        if (currentLine.empty() || (currentLine.length() >= 2 && currentLine.substr(0, 2) == "//")) continue;
+        
         stringstream ss(currentLine);
         string command;
         ss >> command;
         
-        if (command == "WHILE") {
-            whileCount++;
-        } else if (command == "ENDWHILE") {
-            whileCount--;
-            if (whileCount == 0) {
-                return i;
-            }
+        if (command == startCmd) count++;
+        else if (command == endCmd) {
+            count--;
+            if (count == 0) return i;
         }
     }
-    return -1;  // ENDWHILE not found (syntax error lol!)
+    return -1;
+}
+
+int findEndWhile(int startIndex, const vector<string>& Buffer) {
+    int whileCount = 1;
+    for (int i = startIndex + 1; i < Buffer.size(); i++) {
+        string currentLine = trim(Buffer[i]);
+        if (currentLine.empty() || (currentLine.length() >= 2 && currentLine.substr(0, 2) == "//")) continue;
+        
+        stringstream ss(currentLine);
+        string command;
+        ss >> command;
+        
+        if (command == "WHILE") whileCount++;
+        else if (command == "ENDWHILE") {
+            whileCount--;
+            if (whileCount == 0) return i;
+        }
+    }
+    return -1;
+}
+
+int findWhile(int startIndex, const vector<string>& Buffer) {
+    int whileCount = 1;
+    for (int i = startIndex - 1; i >= 0; i--) {
+        string currentLine = trim(Buffer[i]);
+        if (currentLine.empty() || (currentLine.length() >= 2 && currentLine.substr(0, 2) == "//")) continue;
+        
+        stringstream ss(currentLine);
+        string command;
+        ss >> command;
+        
+        if (command == "ENDWHILE") whileCount++;
+        else if (command == "WHILE") {
+            whileCount--;
+            if (whileCount == 0) return i;
+        }
+    }
+    return -1;
 }
 
 //engine that processes a single line, moved here so IF can call it recursively
@@ -180,6 +217,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
     stringstream ss(line);
     string command;
     ss >> command;
+    
     //if the line starts with //, completely ignore it and stop processing
     if (command.length() >= 2 && command.substr(0, 2) == "//") {
         return; 
@@ -208,24 +246,19 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
     else if (command == "INPUT") {
         string varName;
         ss >> varName;
-        
         if (!checkVarExists(varName)) return;
 
         cout << "Enter value for " << varName << ": ";
         string rawInput;
         getline(cin >> ws, rawInput);
-        
         varValue newVal;
 
         //checks if starts with quote for string
         if (rawInput[0] == '"') {
             newVal.type = TYPE_STRING;
             size_t lastQuote = rawInput.find_last_of('"');
-            if (lastQuote != string::npos && lastQuote > 0) {
-                newVal.s_val = rawInput.substr(1, lastQuote - 1);
-            } else {
-                newVal.s_val = rawInput.substr(1);
-            }
+            if (lastQuote != string::npos && lastQuote > 0) newVal.s_val = rawInput.substr(1, lastQuote - 1);
+            else newVal.s_val = rawInput.substr(1);
         }
         //checks if it has a dot for float
         else if (rawInput.find('.') != string::npos) {
@@ -239,7 +272,6 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
             try { newVal.i_val = stoi(rawInput); } catch(...) { newVal.i_val = 0; }
             newVal.f_val = (float)newVal.i_val; 
         }
-        
         //save it to map
         variables[varName] = newVal;
     }
@@ -255,9 +287,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
             size_t lastQuote = restOfLine.find_last_of('"');
             if (lastQuote != string::npos && lastQuote > 0) {
                 cout << ">> " << restOfLine.substr(1, lastQuote - 1) << endl;
-            } else {
-                cout << "Error: Missing closing quote in OUTPUT!" << endl;
-            }
+            } else cout << "Error: Missing closing quote in OUTPUT!" << endl;
         }
         //if raw number
         else if (isdigit(restOfLine[0]) || (restOfLine[0] == '-' && restOfLine.length() > 1 && isdigit(restOfLine[1]))) {
@@ -266,7 +296,6 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
         //else must be a variable
         else {
             if (!checkVarExists(restOfLine)) return;
-            
             //find in the map and print it
             varValue v = variables[restOfLine];
             if (v.type == TYPE_INT) cout << ">> " << v.i_val << endl;
@@ -277,16 +306,12 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
     else if (command == "GOTO") {
         int targetLine;
         ss >> targetLine;
-
         //make sure the line exists in Buffer
         if (targetLine > 0 && targetLine <= Buffer.size()) {
             //fun trick here, target line - 1 to adjust for 0 index and
             //then another -1 so that the ++i of loop runs the actual line required
             i = targetLine - 2;
-        }
-        else {
-            cout << "Error: Line " << targetLine << " does not exist!" << endl;
-        }
+        } else cout << "Error: Line " << targetLine << " does not exist!" << endl;
     }
     else if (command == "IF") {
         string leftSide, op, rightSide;
@@ -307,95 +332,111 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
             return;
         }
 
-        //if the condition is met, extract the rest of the line and run it
         if (conditionMet) {
+            previousIfBranchExecuted = true;
             string restOfLine;
             getline(ss, restOfLine);
             restOfLine = trim(restOfLine);
             
-            if (!restOfLine.empty()) {
-                executeLine(restOfLine, i, Buffer);
-            }
-            //skipping else if condition is true
-            if (i + 1 < (int)Buffer.size()) {
-                string nextLine = trim(Buffer[i + 1]);
-                if (nextLine.length() >= 4 && nextLine.substr(0, 4) == "ELSE") {
-                    i++; 
-                }
-            }
+            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
         } else {
-            if (i + 1 < (int)Buffer.size()) {
-                string nextLine = trim(Buffer[i + 1]);
-                if (nextLine.length() >= 4 && nextLine.substr(0, 4) == "ELSE") {
-                    i++;
-                    string elseBranch = trim(nextLine.substr(4));
-                    if (!elseBranch.empty()) {
-                        executeLine(elseBranch, i, Buffer);
-                    }
-                }
-            }
+            previousIfBranchExecuted = false;
+            int endIdx = findBlockEnd(i, Buffer, "IF", "ENDIF");
+            if (endIdx != -1) i = endIdx; 
         }
     }
+    else if (command == "ELIF") {
+        if (previousIfBranchExecuted) {
+            int endIdx = findBlockEnd(i, Buffer, "ELIF", "ENDELIF");
+            if (endIdx != -1) i = endIdx;
+            return;
+        }
+        
+        string leftSide, op, rightSide;
+        ss >> leftSide >> op >> rightSide;
+
+        float leftVal = getValue(leftSide);
+        float rightVal = getValue(rightSide);
+
+        bool conditionMet = false;
+        if (op == "==") conditionMet = (leftVal == rightVal);
+        else if (op == "!=") conditionMet = (leftVal != rightVal);
+        else if (op == "<") conditionMet = (leftVal < rightVal);
+        else if (op == ">") conditionMet = (leftVal > rightVal);
+        else if (op == "<=") conditionMet = (leftVal <= rightVal);
+        else if (op == ">=") conditionMet = (leftVal >= rightVal);
+        else {
+            cout << "Error: Unknown operator '" << op << "' in ELIF statement!" << endl;
+            return;
+        }
+
+        if (conditionMet) {
+            previousIfBranchExecuted = true;
+            string restOfLine;
+            getline(ss, restOfLine);
+            restOfLine = trim(restOfLine);
+            
+            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
+        } else {
+            int endIdx = findBlockEnd(i, Buffer, "ELIF", "ENDELIF");
+            if (endIdx != -1) i = endIdx; 
+        }
+    }
+    else if (command == "ELSE") {
+        if (previousIfBranchExecuted) {
+            int endIdx = findBlockEnd(i, Buffer, "ELSE", "ENDELSE");
+            if (endIdx != -1) i = endIdx;
+            return;
+        }
+        
+        previousIfBranchExecuted = true;
+        string restOfLine;
+        getline(ss, restOfLine);
+        restOfLine = trim(restOfLine);
+        
+        if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
+    }
+    else if (command == "ENDIF" || command == "ENDELIF" || command == "ENDELSE") {
+        return; 
+    }
     else if (command == "WHILE") {
-        // Parse: WHILE leftVar op rightVar
         string leftSide, op, rightSide;
         ss >> leftSide >> op >> rightSide;
         
-        // Validate operator
         if (op != "==" && op != "!=" && op != "<" && op != ">" && op != "<=" && op != ">=") {
             cout << "Error: Unknown operator '" << op << "' in WHILE statement!" << endl;
             return;
         }
         
-        // Find foor the matching ENDWHILE
-        int endWhileIndex = findEndWhile(i, Buffer);
-        if (endWhileIndex == -1) {
-            cout << "Error: Matching ENDWHILE not found!" << endl;
-            return;
-        }
+        float leftVal = getValue(leftSide);
+        float rightVal = getValue(rightSide);
         
-        // Loop while condition is true
-        int maxIterations = 1000000;  // prevent infinite loops, I feel there might be a better way to do this but for now this is a simple safeguard
-        int iterations = 0;
+        bool conditionMet = false;
+        if (op == "==") conditionMet = (leftVal == rightVal);
+        else if (op == "!=") conditionMet = (leftVal != rightVal);
+        else if (op == "<") conditionMet = (leftVal < rightVal);
+        else if (op == ">") conditionMet = (leftVal > rightVal);
+        else if (op == "<=") conditionMet = (leftVal <= rightVal);
+        else if (op == ">=") conditionMet = (leftVal >= rightVal);
         
-        while (iterations < maxIterations) {
-            // Evaluate condition
-            float leftVal = getValue(leftSide);
-            float rightVal = getValue(rightSide);
-            
-            bool conditionMet = false;
-            if (op == "==") conditionMet = (leftVal == rightVal);
-            else if (op == "!=") conditionMet = (leftVal != rightVal);
-            else if (op == "<") conditionMet = (leftVal < rightVal);
-            else if (op == ">") conditionMet = (leftVal > rightVal);
-            else if (op == "<=") conditionMet = (leftVal <= rightVal);
-            else if (op == ">=") conditionMet = (leftVal >= rightVal);
-            
-            // Break if condition is false
-            if (!conditionMet) {
-                break;
+        if (!conditionMet) {
+            int endIdx = findEndWhile(i, Buffer);
+            if (endIdx != -1) {
+                i = endIdx; 
+            } else {
+                cout << "Error: Missing ENDWHILE for WHILE!" << endl;
+                isRunning = false;
             }
-            
-            // Execute the loop body
-            for (int j = i + 1; j < endWhileIndex; j++) {
-                string loopBodyLine = Buffer[j];
-                if (loopBodyLine.empty()) continue;
-                
-                int jTemp = j;
-                executeLine(loopBodyLine, jTemp, Buffer);
-                j = jTemp;
-                
-                if (!isRunning) return;
-            }
-            iterations++;
         }
-        
-        if (iterations >= maxIterations) {
-            cout << "Error: WHILE loop exceeded maximum iterations (likely infinite loop)!" << endl;
+    }
+    else if (command == "ENDWHILE") {
+        int startIdx = findWhile(i, Buffer);
+        if (startIdx != -1) {
+            i = startIdx - 1; 
+        } else {
+            cout << "Error: Missing WHILE for ENDWHILE!" << endl;
+            isRunning = false;
         }
-        
-        // Jump past ENDWHILE
-        i = endWhileIndex;
     }
     else {
         //ARITHMETIC LOGIC
@@ -415,18 +456,13 @@ void executeLine(string line, int& i, const vector<string>& Buffer) {
             variables[targetVar].f_val = result;
             variables[targetVar].i_val = (int)result;
 
-            if (result == (int)result) {
-                variables[targetVar].type = TYPE_INT;
-            } else {
-                variables[targetVar].type = TYPE_FLOAT;
-            }
+            if (result == (int)result) variables[targetVar].type = TYPE_INT;
+            else variables[targetVar].type = TYPE_FLOAT;
         }
     }
 }
 
-
 int main(int argc, char* argv[]) {
-
     if (argc < 2){
         cerr << "Usage: algo <filename>" << endl;
         return 1;
@@ -448,15 +484,13 @@ int main(int argc, char* argv[]) {
     while (getline(file, line)){
         Buffer.push_back(line);
     }
-   
     //we stop using the file as we already have all the code in the buffer
     file.close();
-   
+    
     //code execution loop
     for(int i = 0; i < Buffer.size(); ++i){
-        
         //access current line from buffer and skip if blank
-        string currentLine = Buffer[i];
+        string currentLine = trim(Buffer[i]);
         if(currentLine.empty()) continue;
         
         //tokenizer
@@ -466,22 +500,18 @@ int main(int argc, char* argv[]) {
 
         //check for start and end points
         if (command == "START") {
-            isRunning = true; //start executing
+            isRunning = true; 
             continue;
         }
 
         //skip to next line if not executing yet
-        if (!isRunning) {
-            continue;
-        }
+        if (!isRunning) continue;
 
         //pass line to the execution engine
         executeLine(currentLine, i, Buffer);
 
         //break out completely if an END command was hit
-        if (!isRunning) {
-            break;
-        }
+        if (!isRunning) break;
     }
 
     return 0;
