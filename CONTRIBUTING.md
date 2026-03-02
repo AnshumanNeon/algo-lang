@@ -1,4 +1,10 @@
-# Contributing to AlgoLang
+<p align="center">
+  <img src="./for_readme/contri.gif" alt="Pixel Art Header" width="100%">
+</p>
+
+---
+
+## Contributing to AlgoLang
 
 First off, thanks for taking the time to contribute! AlgoLang started as a personal challenge to turn classroom algorithms into a real working language, and it's awesome to see others interested in building it further.
 
