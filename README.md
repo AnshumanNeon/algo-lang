@@ -174,3 +174,7 @@ algo.exe ./path/to/your/file.txt
 well thats about it. idk if i am gonna work on this anymore but yall are free to contribute to it. its a simple project so will be good for new programmers instead of jumping into a complex repo.
 
 AlgoLang is a community project! If you want to help make it a "real" language, please check out our [Contributing Guidelines](CONTRIBUTING.md) for a list of to-dos and rules for submitting Pull Requests.
+
+## License
+
+This project is licensed under the [MIT LICENSE](LICENSE) - see the LICENSE file for details.
