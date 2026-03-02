@@ -173,10 +173,4 @@ algo.exe ./path/to/your/file.txt
 
 well thats about it. idk if i am gonna work on this anymore but yall are free to contribute to it. its a simple project so will be good for new programmers instead of jumping into a complex repo.
 
-If you want to add new keywords, improve the parser, or fix bugs:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature-new-keyword`).
-3. Make your changes and commit them.
-4. Test that all files in the `/example_code` folder run successfully before submitting.
-5. Push to your fork and submit a Pull Request!
+AlgoLang is a community project! If you want to help make it a "real" language, please check out our [Contributing Guidelines](CONTRIBUTING.md) for a list of to-dos and rules for submitting Pull Requests.
