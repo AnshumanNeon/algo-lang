@@ -1,16 +1,15 @@
 #include "execute.hpp"
-#include "utils.hpp"
 
 using namespace std;
 
-float doMaths(const string& expression) {
+float doMaths(const string& expression, map<string, varValue>* variables) {
     //instantiate the local parser and do the calculation
     size_t pos = 0;
-    return parseExpression(expression, pos);
+    return parseExpression(expression, pos, variables);
 }
 
 //engine that processes a single line, moved here so IF can call it recursively
-void executeLine(string line, int& i, const vector<string>& Buffer, map<string, varValue>* variables) {
+void executeLine(string line, int& i, const vector<string>& Buffer, map<string, varValue>* variables, bool* previousIfBranchExecuted, bool* isRunning) {
     stringstream ss(line);
     string command;
     ss >> command;
@@ -21,7 +20,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
     }
 
     if (command == "END") {
-        isRunning = false; //strop executing
+        *isRunning = false; //stop executing
         return;
     }
     else if (command == "DECLARE") {
@@ -35,7 +34,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
                 if (variables->count(varName) > 0) {
                     cout << "Error: Variable '" << varName << "' already declared!" << endl;
                 } else {
-                    *variables[varName] = varValue();
+		    (*variables)[varName] = varValue();
                 }
             }
         }
@@ -43,7 +42,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
     else if (command == "INPUT") {
         string varName;
         ss >> varName;
-        if (!checkVarExists(varName)) return;
+        if (!checkVarExists(varName, variables)) return;
 
         cout << "Enter value for " << varName << ": ";
         string rawInput;
@@ -70,7 +69,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
             newVal.f_val = (float)newVal.i_val; 
         }
         //save it to map
-        variables[varName] = newVal;
+        (*variables)[varName] = newVal;
     }
     else if (command == "OUTPUT") {
         string restOfLine;
@@ -92,9 +91,9 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         }
         //else must be a variable
         else {
-            if (!checkVarExists(restOfLine)) return;
+	  if (!checkVarExists(restOfLine, variables)) return;
             //find in the map and print it
-            varValue v = variables[restOfLine];
+	    varValue v = (*variables)[restOfLine];
             if (v.type == TYPE_INT) cout << ">> " << v.i_val << endl;
             else if (v.type == TYPE_FLOAT) cout << ">> " << v.f_val << endl;
             else if (v.type == TYPE_STRING) cout << ">> " << v.s_val << endl;
@@ -114,8 +113,8 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         string leftSide, op, rightSide;
         ss >> leftSide >> op >> rightSide;
 
-        float leftVal = getValue(leftSide);
-        float rightVal = getValue(rightSide);
+        float leftVal = getValue(leftSide, variables);
+        float rightVal = getValue(rightSide, variables);
 
         bool conditionMet = false;
         if (op == "==") conditionMet = (leftVal == rightVal);
@@ -130,20 +129,20 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         }
 
         if (conditionMet) {
-            previousIfBranchExecuted = true;
+            *previousIfBranchExecuted = true;
             string restOfLine;
             getline(ss, restOfLine);
             restOfLine = trim(restOfLine);
             
-            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
+            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer, variables, previousIfBranchExecuted, isRunning);
         } else {
-            previousIfBranchExecuted = false;
+            *previousIfBranchExecuted = false;
             int endIdx = findBlockEnd(i, Buffer, "IF", "ENDIF");
             if (endIdx != -1) i = endIdx; 
         }
     }
     else if (command == "ELIF") {
-        if (previousIfBranchExecuted) {
+        if (*previousIfBranchExecuted) {
             int endIdx = findBlockEnd(i, Buffer, "ELIF", "ENDELIF");
             if (endIdx != -1) i = endIdx;
             return;
@@ -152,8 +151,8 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         string leftSide, op, rightSide;
         ss >> leftSide >> op >> rightSide;
 
-        float leftVal = getValue(leftSide);
-        float rightVal = getValue(rightSide);
+        float leftVal = getValue(leftSide, variables);
+        float rightVal = getValue(rightSide, variables);
 
         bool conditionMet = false;
         if (op == "==") conditionMet = (leftVal == rightVal);
@@ -168,30 +167,30 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         }
 
         if (conditionMet) {
-            previousIfBranchExecuted = true;
+            *previousIfBranchExecuted = true;
             string restOfLine;
             getline(ss, restOfLine);
             restOfLine = trim(restOfLine);
             
-            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
+            if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer, variables, previousIfBranchExecuted, isRunning);
         } else {
             int endIdx = findBlockEnd(i, Buffer, "ELIF", "ENDELIF");
             if (endIdx != -1) i = endIdx; 
         }
     }
     else if (command == "ELSE") {
-        if (previousIfBranchExecuted) {
+        if (*previousIfBranchExecuted) {
             int endIdx = findBlockEnd(i, Buffer, "ELSE", "ENDELSE");
             if (endIdx != -1) i = endIdx;
             return;
         }
         
-        previousIfBranchExecuted = true;
+        *previousIfBranchExecuted = true;
         string restOfLine;
         getline(ss, restOfLine);
         restOfLine = trim(restOfLine);
         
-        if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer);
+        if (!restOfLine.empty()) executeLine(restOfLine, i, Buffer, variables, previousIfBranchExecuted, isRunning);
     }
     else if (command == "ENDIF" || command == "ENDELIF" || command == "ENDELSE") {
         return; 
@@ -205,8 +204,8 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
             return;
         }
         
-        float leftVal = getValue(leftSide);
-        float rightVal = getValue(rightSide);
+        float leftVal = getValue(leftSide, variables);
+        float rightVal = getValue(rightSide, variables);
         
         bool conditionMet = false;
         if (op == "==") conditionMet = (leftVal == rightVal);
@@ -222,7 +221,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
                 i = endIdx; 
             } else {
                 cout << "Error: Missing ENDWHILE for WHILE!" << endl;
-                isRunning = false;
+                *isRunning = false;
             }
         }
     }
@@ -232,7 +231,7 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
             i = startIdx - 1; 
         } else {
             cout << "Error: Missing WHILE for ENDWHILE!" << endl;
-            isRunning = false;
+            *isRunning = false;
         }
     }
     else {
@@ -242,19 +241,19 @@ void executeLine(string line, int& i, const vector<string>& Buffer, map<string, 
         ss >> equalsSign;
 
         if (equalsSign == "=") {
-            if (!checkVarExists(targetVar)) return;
+	  if (!checkVarExists(targetVar, variables)) return;
 
             string expression;
             //take the mathematical expression and pass it to doMaths
             getline(ss, expression);
             
-            float result = doMaths(expression);
+            float result = doMaths(expression, variables);
             
-            variables[targetVar].f_val = result;
-            variables[targetVar].i_val = (int)result;
+            (*variables)[targetVar].f_val = result;
+            (*variables)[targetVar].i_val = (int)result;
 
-            if (result == (int)result) variables[targetVar].type = TYPE_INT;
-            else variables[targetVar].type = TYPE_FLOAT;
+            if (result == (int)result) (*variables)[targetVar].type = TYPE_INT;
+            else (*variables)[targetVar].type = TYPE_FLOAT;
         }
     }
 }

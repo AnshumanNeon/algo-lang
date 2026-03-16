@@ -10,6 +10,7 @@ src_files = $(wildcard $(src_dir)/*.cpp)
 target = algo_lang
 
 $(build_dir)/$(target):
+	mkdir -p $(build_dir)
 	$(compiler) $(compile_flags) -I$(include_dir) $(src_files) -o $@
 
 clean:

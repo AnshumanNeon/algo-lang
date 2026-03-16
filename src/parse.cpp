@@ -1,5 +1,4 @@
 #include "parse.hpp"
-#include "utils.hpp"
 
 using namespace std;
 
@@ -25,7 +24,7 @@ float parseFactor(const string& str, size_t& pos, map<string, varValue>* variabl
 
   if (str[pos] == '(') {
     pos++;
-    float val = parseExpression(str, pos);
+    float val = parseExpression(str, pos, variables);
     skipWhitespace(str, pos);
     if (pos < str.length() && str[pos] == ')') pos++;
     return sign * val;
@@ -41,15 +40,15 @@ float parseFactor(const string& str, size_t& pos, map<string, varValue>* variabl
   if (isdigit(token[0]) || token[0] == '.') {
     return sign * stof(token);
   } else {
-    if (!checkVarExists(token)) return 0.0f;
-    return sign * variables[token]->f_val;
+    if (!checkVarExists(token, variables)) return 0.0f;
+    return sign * (*variables)[token].f_val;
   }
 }
         
 //handles multiplication, division, and modulus
 //makes sure these happen before addition or subtraction.
-float parseTerm(const string& str, size_t& pos) {
-  float val = parseFactor(str, pos);
+float parseTerm(const string& str, size_t& pos, map<string, varValue>* variables) {
+  float val = parseFactor(str, pos, variables);
   while (true) {
     skipWhitespace(str, pos);
     if (pos >= str.length()) break;
@@ -58,7 +57,7 @@ float parseTerm(const string& str, size_t& pos) {
     if (op != '*' && op != '/' && op != '%') break;
                 
     pos++;
-    float nextVal = parseFactor(str, pos);
+    float nextVal = parseFactor(str, pos, variables);
                 
     if (op == '*') val *= nextVal;
     else if (op == '/') {
@@ -76,8 +75,8 @@ float parseTerm(const string& str, size_t& pos) {
         
 //handles addition and subtraction.
 //starting funciton of the parser
-float parseExpression(const string& str, size_t& pos) {
-  float val = parseTerm(str, pos);
+float parseExpression(const string& str, size_t& pos, map<string, varValue>* variables) {
+  float val = parseTerm(str, pos, variables);
   while (true) {
     skipWhitespace(str, pos);
     if (pos >= str.length()) break;
@@ -86,7 +85,7 @@ float parseExpression(const string& str, size_t& pos) {
     if (op != '+' && op != '-') break;
                 
     pos++;
-    float nextVal = parseTerm(str, pos);
+    float nextVal = parseTerm(str, pos, variables);
                 
     if (op == '+') val += nextVal;
     else if (op == '-') val -= nextVal;

@@ -24,7 +24,7 @@ float getValue(const string& token, map<string, varValue>* variables) {
     if (isdigit(token[0]) || (token[0] == '-' && token.length() > 1 && isdigit(token[1]))) {
         return stof(token);
     } else {
-        if (checkVarExists(token)) return variables[token].f_val;
+      if (checkVarExists(token, variables)) return (*variables)[token].f_val;
         return 0.0f; 
     }
 }

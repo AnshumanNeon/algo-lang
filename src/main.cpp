@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include "execute.hpp"
+#include "types.hpp"
 
 using namespace std;
 
@@ -56,7 +57,7 @@ int main(int argc, char* argv[]) {
         if (!isRunning) continue;
 
         //pass line to the execution engine
-        executeLine(currentLine, i, Buffer);
+        executeLine(currentLine, i, Buffer, &variables, &previousIfBranchExecuted, &isRunning);
 
         //break out completely if an END command was hit
         if (!isRunning) break;
